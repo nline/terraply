@@ -12,6 +12,8 @@ parser.add_argument('-target', action='append', type=str,
                     help="A globable list of targets. If ommitted all targets will be considered.")
 parser.add_argument('-exclude', action='append', type=str,
                     help="A globable list of targets to exclude")
+parser.add_argument('-summary', nargs='?', const=1, type=int,
+                    help="Does not print apply output over the specified amount")
 
 def main():
     # Get the arguments
@@ -89,7 +91,42 @@ def main():
     command = ["terraform"] +  unknownargs +  targets
 
     # Call terraform with the new target list
-    subprocess.run(command)
+    if args.summary:
+        with subprocess.Popen(command, stdout=subprocess.PIPE, bufsize=1, universal_newlines=True) as p:
+            waiting = False
+            line_buf = ""
+            line_count = 0
+            for line in p.stdout:
+                if waiting:
+                    if "  # " in line or "Plan" in line:
+                        if line_count > args.summary:
+                            pass
+                            #sys.stdout.write("    Skipping long change summary...")
+                        else:
+                            sys.stdout.write(line_buf)
+
+                        sys.stdout.write(line)
+
+                        if "Plan" in line:
+                            waiting= False
+                            line_buf = ""
+                            line_count = 0
+                        else:
+                            line_buf = ""
+                            line_count = 0
+                    else:
+                        line_buf += line
+                        line_count += 1
+                else:
+                    if "  # " in line:
+                        sys.stdout.write(line)
+                        waiting=True
+                        line_buf = ""
+                        line_count = 0
+                    else:
+                        sys.stdout.write(line)
+    else:
+        subprocess.run(command)
 
 if __name__ == "__main__":
     main()
